@@ -241,6 +241,16 @@ static void style_handler(enum httpd_uri_handler_status status,
 	}
 }
 
+static void script_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response)
+{
+	if (status == HTTP_CB_NEW) {
+		output_plain_file(response, "script.js");
+		response->info.content_type = "application/javascript";
+	}
+}
+
 static void not_found_handler(enum httpd_uri_handler_status status,
 	struct httpd_request *request,
 	struct httpd_response *response)
@@ -271,6 +281,7 @@ int start_web_failsafe(void)
 	httpd_register_uri_handler(inst, "/flashing", &flashing_handler, NULL);
 	httpd_register_uri_handler(inst, "/result", &result_handler, NULL);
 	httpd_register_uri_handler(inst, "/style.css", &style_handler, NULL);
+	httpd_register_uri_handler(inst, "/script.js", &script_handler, NULL);
 	httpd_register_uri_handler(inst, "", &not_found_handler, NULL);
 
 	net_loop(TCP);
