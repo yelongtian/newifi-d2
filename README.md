@@ -95,8 +95,7 @@ TTL serial port baud rate, 57600 or 115200
 
 1. Flash `u-boot-mt7621.bin` into board.
 
-2. Set computer IP address to `192.168.1.2` and Netmask to `255.255.255.0`.  
-   Gateway `192.168.1.1` is optional.
+2. Set computer network subnet get method to DHCP
 
 3. Remove the power supply, press and hold the reset button, plug in the  
    power supply. And then you can choose:
