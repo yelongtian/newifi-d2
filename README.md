@@ -2,7 +2,16 @@
 
 ![Web Recovery Page](WebRecovery.png)
 
-A modified version of DragonBluep's u-boot for mt7621 by Yuzhii, with support for auto dhcp, and beautiful webui.
+A modified version of DragonBluep's u-boot for mt7621 by Yuzhii.
+
+Support functions and Features:
+
+   - Failsafe Mode with Web Recovery Page
+   - Support light/dark theme
+   - I18n support (English/Chinese)
+   - Auto dhcpd server
+   - Support Web upgrade U-Boot
+   - Can boot Initramfs firmware in Web
 
 Support Actions to build automatically. 
 
@@ -40,7 +49,7 @@ Support Actions to build automatically.
    wget -O - https://github.com/DragonBluep/uboot-mt7621/releases/download/20230517/openwrt-toolchain-ramips-mt7621_gcc-12.3.0_musl.Linux-x86_64.tar.xz | tar --xz -xf -
    ```
 
-   > The toolchain and U-Boot should be in the same directory()
+   > The toolchain directory and U-Boot source directory should be in the same directory
 
 4. Run build script:
 
