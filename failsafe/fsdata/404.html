@@ -1,33 +1,22 @@
-<!DOCTYPE html>
+<!DOCTYPE HTML>
 <html>
+
 <head>
-    <title>404 - MediaTek System Recovery Mode</title>
-    <link rel="stylesheet" type="text/css" href="/style.css">
-    <script src="/script.js"></script>
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta charset="UTF-8">
+    <title data-i18n="page_404_title">404 - Not found</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/main.js"></script>
 </head>
-<body>
-    <div class="controls">
-        <div class="select-container">
-            <select id="language-selector">
-                <option value="en">English</option>
-                <option value="zh">中文</option>
-            </select>
-        </div>
-        <div class="select-container">
-            <select id="theme-selector">
-                <option value="auto" data-i18n="theme_auto">Auto</option>
-                <option value="light" data-i18n="theme_light">Light</option>
-                <option value="dark" data-i18n="theme_dark">Dark</option>
-            </select>
+
+<body onload="startup()">
+    <div id="m">
+        <h1 data-i18n="page_404_title">404 - Not found</h1>
+        <div class="i e">
+            <strong data-i18n="page_not_found">Page not found</strong>
         </div>
     </div>
-    <div id="banner" data-i18n="banner">
-        MediaTek U-Boot System Recovery Mode
-    </div>
-    <div id="main">
-        <p><strong data-i18n="page_not_found">Page not found</strong></p>
-    </div>
+    <div id="version"></div>
 </body>
+
 </html>
