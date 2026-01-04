@@ -1348,7 +1348,7 @@ endif
 
 u-boot-mt7621.bin: $(if $(CONFIG_SPL),$(MT7621_SPL_BINLOAD) $(SPL_PAYLOAD)) \
 		   u-boot.bin u-boot.dtb FORCE
-	$(call if_changed,binman)
+		python3 $(srctree)/tools/binman/binman.py -d u-boot.dtb -O . -I . -I $(srctree)/board/$(BOARDDIR) $<
 
 quiet_cmd_mtk_spl_patch = PATCH   $@
 cmd_mtk_spl_patch = cp $< $@ && \
