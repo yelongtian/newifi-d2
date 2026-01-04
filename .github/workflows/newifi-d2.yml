@@ -25,7 +25,9 @@ jobs:
       - name: Install essential packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y swig wget tar
+          sudo apt-get install -y swig wget tar python3 python3-pip
+          # Set python3 as default to ensure all tools use python3
+          sudo ln -sf /usr/bin/python3 /usr/bin/python
 
       - name: Download OpenWrt toolchain
         run: |
