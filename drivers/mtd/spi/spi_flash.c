@@ -20,12 +20,19 @@
 
 #include "sf_internal.h"
 
-static void spi_flash_addr(u32 addr, u8 *cmd)
+static void spi_flash_addr(struct spi_flash *flash, u32 addr, u8 *cmd)
 {
 	/* cmd[0] is actual command */
-	cmd[1] = addr >> 16;
-	cmd[2] = addr >> 8;
-	cmd[3] = addr >> 0;
+	if (flash->use_4byte_addr) {
+		cmd[1] = addr >> 24;
+		cmd[2] = addr >> 16;
+		cmd[3] = addr >> 8;
+		cmd[4] = addr >> 0;
+	} else {
+		cmd[1] = addr >> 16;
+		cmd[2] = addr >> 8;
+		cmd[3] = addr >> 0;
+	}
 }
 
 static int read_sr(struct spi_flash *flash, u8 *rs)
@@ -314,8 +321,16 @@ int spi_flash_write_common(struct spi_flash *flash, const u8 *cmd,
 int spi_flash_cmd_erase_ops(struct spi_flash *flash, u32 offset, size_t len)
 {
 	u32 erase_size, erase_addr;
-	u8 cmd[SPI_FLASH_CMD_LEN];
+	u8 *cmd;
+	int cmd_len;
 	int ret = -1;
+
+	cmd_len = flash->use_4byte_addr ? SPI_FLASH_4B_CMD_LEN : SPI_FLASH_CMD_LEN;
+	cmd = calloc(1, cmd_len);
+	if (!cmd) {
+		debug("SF: Failed to allocate cmd\n");
+		return -ENOMEM;
+	}
 
 	erase_size = flash->erase_size;
 	if (offset % erase_size || len % erase_size) {
@@ -344,12 +359,16 @@ int spi_flash_cmd_erase_ops(struct spi_flash *flash, u32 offset, size_t len)
 		if (ret < 0)
 			return ret;
 #endif
-		spi_flash_addr(erase_addr, cmd);
+		spi_flash_addr(flash, erase_addr, cmd);
 
-		debug("SF: erase %2x %2x %2x %2x (%x)\n", cmd[0], cmd[1],
-		      cmd[2], cmd[3], erase_addr);
+		if (flash->use_4byte_addr)
+			debug("SF: erase %2x %2x %2x %2x %2x (%x)\n", cmd[0], cmd[1],
+			      cmd[2], cmd[3], cmd[4], erase_addr);
+		else
+			debug("SF: erase %2x %2x %2x %2x (%x)\n", cmd[0], cmd[1],
+			      cmd[2], cmd[3], erase_addr);
 
-		ret = spi_flash_write_common(flash, cmd, sizeof(cmd), NULL, 0);
+		ret = spi_flash_write_common(flash, cmd, cmd_len, NULL, 0);
 		if (ret < 0) {
 			debug("SF: erase failed\n");
 			break;
@@ -363,6 +382,7 @@ int spi_flash_cmd_erase_ops(struct spi_flash *flash, u32 offset, size_t len)
 	ret = clean_bar(flash);
 #endif
 
+	free(cmd);
 	return ret;
 }
 
@@ -373,8 +393,16 @@ int spi_flash_cmd_write_ops(struct spi_flash *flash, u32 offset,
 	unsigned long byte_addr, page_size;
 	u32 write_addr;
 	size_t chunk_len, actual;
-	u8 cmd[SPI_FLASH_CMD_LEN];
+	u8 *cmd;
+	int cmd_len;
 	int ret = -1;
+
+	cmd_len = flash->use_4byte_addr ? SPI_FLASH_4B_CMD_LEN : SPI_FLASH_CMD_LEN;
+	cmd = calloc(1, cmd_len);
+	if (!cmd) {
+		debug("SF: Failed to allocate cmd\n");
+		return -ENOMEM;
+	}
 
 	page_size = flash->page_size;
 
@@ -404,14 +432,18 @@ int spi_flash_cmd_write_ops(struct spi_flash *flash, u32 offset,
 
 		if (spi->max_write_size)
 			chunk_len = min(chunk_len,
-					spi->max_write_size - sizeof(cmd));
+					spi->max_write_size - cmd_len);
 
-		spi_flash_addr(write_addr, cmd);
+		spi_flash_addr(flash, write_addr, cmd);
 
-		debug("SF: 0x%p => cmd = { 0x%02x 0x%02x%02x%02x } chunk_len = %zu\n",
-		      buf + actual, cmd[0], cmd[1], cmd[2], cmd[3], chunk_len);
+		if (flash->use_4byte_addr)
+			debug("SF: 0x%p => cmd = { 0x%02x 0x%02x%02x%02x%02x } chunk_len = %zu\n",
+			      buf + actual, cmd[0], cmd[1], cmd[2], cmd[3], cmd[4], chunk_len);
+		else
+			debug("SF: 0x%p => cmd = { 0x%02x 0x%02x%02x%02x } chunk_len = %zu\n",
+			      buf + actual, cmd[0], cmd[1], cmd[2], cmd[3], chunk_len);
 
-		ret = spi_flash_write_common(flash, cmd, sizeof(cmd),
+		ret = spi_flash_write_common(flash, cmd, cmd_len,
 					buf + actual, chunk_len);
 		if (ret < 0) {
 			debug("SF: write failed\n");
@@ -425,6 +457,7 @@ int spi_flash_cmd_write_ops(struct spi_flash *flash, u32 offset,
 	ret = clean_bar(flash);
 #endif
 
+	free(cmd);
 	return ret;
 }
 
@@ -468,7 +501,8 @@ int spi_flash_cmd_read_ops(struct spi_flash *flash, u32 offset,
 		size_t len, void *data)
 {
 	struct spi_slave *spi = flash->spi;
-	u8 *cmd, cmdsz;
+	u8 *cmd;
+	int cmd_len, cmdsz;
 	u32 remain_len, read_len, read_addr;
 	int bank_sel = 0;
 	int ret = -1;
@@ -487,7 +521,8 @@ int spi_flash_cmd_read_ops(struct spi_flash *flash, u32 offset,
 		return 0;
 	}
 
-	cmdsz = SPI_FLASH_CMD_LEN + flash->dummy_byte;
+	cmd_len = flash->use_4byte_addr ? SPI_FLASH_4B_CMD_LEN : SPI_FLASH_CMD_LEN;
+	cmdsz = cmd_len + flash->dummy_byte;
 	cmd = calloc(1, cmdsz);
 	if (!cmd) {
 		debug("SF: Failed to allocate cmd\n");
@@ -518,7 +553,7 @@ int spi_flash_cmd_read_ops(struct spi_flash *flash, u32 offset,
 		if (spi->max_read_size)
 			read_len = min(read_len, spi->max_read_size);
 
-		spi_flash_addr(read_addr, cmd);
+		spi_flash_addr(flash, read_addr, cmd);
 
 		ret = spi_flash_read_common(flash, cmd, cmdsz, data, read_len);
 		if (ret < 0) {
@@ -1319,8 +1354,21 @@ int spi_flash_scan(struct spi_flash *flash)
 	     (flash->size > SPI_FLASH_16MB_BOUN)) ||
 	     ((flash->dual_flash > SF_SINGLE_FLASH) &&
 	     (flash->size > SPI_FLASH_16MB_BOUN << 1))) {
-		puts("SF: Warning - Only lower 16MiB accessible,");
-		puts(" Full access #define CONFIG_SPI_FLASH_BAR\n");
+		/* Enable 4-byte address mode for large flash */
+		ret = spi_flash_cmd(flash->spi, CMD_ENTER_4B_ADDR, NULL, 0);
+		if (ret < 0) {
+			debug("SF: Failed to enter 4-byte address mode\n");
+			return ret;
+		}
+		flash->use_4byte_addr = 1;
+		
+		/* Update commands for 4-byte address mode */
+		if (flash->read_cmd == CMD_READ_ARRAY_FAST)
+			flash->read_cmd = CMD_READ_4B_ARRAY_FAST;
+		if (flash->erase_cmd == CMD_ERASE_64K)
+			flash->erase_cmd = CMD_ERASE_4B_64K;
+	} else {
+		flash->use_4byte_addr = 0;
 	}
 #endif
 
