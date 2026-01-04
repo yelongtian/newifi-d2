@@ -1,0 +1,119 @@
+name: Build Newifi D2 u-boot with W25Q512JVFIQ support
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'drivers/mtd/spi/**'
+      - 'include/spi_flash.h'
+      - '.github/workflows/newifi-d2.yml'
+
+jobs:
+  build:
+    name: Build Newifi D2 u-boot
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout master directory
+        uses: actions/checkout@v4
+        with:
+          path: uboot-mt7621
+
+      - name: Install essential packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y swig wget tar
+
+      - name: Download OpenWrt toolchain
+        run: |
+          wget -O - https://github.com/DragonBluep/uboot-mt7621/releases/download/20230517/openwrt-toolchain-ramips-mt7621_gcc-12.3.0_musl.Linux-x86_64.tar.xz \
+            | tar --xz -xf -
+
+      - name: Compile Newifi D2 u-boot
+        working-directory: uboot-mt7621
+        run: |
+          # Clean up previous build artifacts
+          make distclean || true
+          
+          # Set up toolchain path
+          TOOLCHAIN=$(cd ../openwrt*/toolchain-mipsel*/bin; pwd)'/mipsel-openwrt-linux-'  
+          echo "Using toolchain: ${TOOLCHAIN}"
+          
+          # Configure for Newifi D2 with W25Q512JVFIQ 64MB NOR flash
+          cp configs/mt7621_nor_template_defconfig configs/mt7621_build_defconfig
+          
+          # Enable SPI flash BAR support for large flash
+          echo "CONFIG_SPI_FLASH_BAR=y" >> configs/mt7621_build_defconfig
+          
+          # Set partition table for 64MB flash
+          echo -e "CONFIG_MTDPARTS_DEFAULT=\"mtdparts=raspi:192k(u-boot),64k(u-boot-env),64k(factory),-(firmware)\"" >> configs/mt7621_build_defconfig
+          
+          # Set kernel offset
+          echo "CONFIG_DEFAULT_NOR_KERNEL_OFFSET=0x50000" >> configs/mt7621_build_defconfig
+          
+          # Newifi D2 specific GPIO configuration
+          # First ensure the file is clean
+          cp include/configs/mt7621-common.h include/configs/mt7621-common.h.bak 2>/dev/null || true
+          grep -v "__CONFIG_MT7621_RESET_LED" include/configs/mt7621-common.h.bak > include/configs/mt7621-common.h 2>/dev/null || true
+          
+          echo -e "#ifndef __CONFIG_MT7621_RESET_LED\n#define __CONFIG_MT7621_RESET_LED" >> ./include/configs/mt7621-common.h
+          echo "CONFIG_FAILSAFE_ON_BUTTON=y" >> configs/mt7621_build_defconfig
+          echo "#define MT7621_BUTTON_RESET 1" >> ./include/configs/mt7621-common.h
+          echo "#define MT7621_LED_STATUS1 13" >> ./include/configs/mt7621-common.h
+          echo "#endif" >> ./include/configs/mt7621-common.h
+          
+          # Set CPU and DRAM frequency
+          echo "CONFIG_MT7621_CPU_FREQ_LEGACY=880" >> configs/mt7621_build_defconfig
+          echo "CONFIG_MT7621_DRAM_FREQ_800_LEGACY=y" >> configs/mt7621_build_defconfig
+          echo "CONFIG_MT7621_DRAM_DDR3_2048M_LEGACY=y" >> configs/mt7621_build_defconfig
+          
+          # Enable serial console baud rate
+          echo "CONFIG_BAUDRATE=115200" >> configs/mt7621_build_defconfig
+          
+          # Debug: Check if spi_flash.h exists and show include paths
+          find . -name "spi_flash.h" -type f
+          
+          # Debug: Show generated defconfig file content
+          echo "=== Generated mt7621_build_defconfig content ==="
+          cat configs/mt7621_build_defconfig
+          
+          # Debug: Check SPI_FLASH related configuration
+          grep -i spi_flash configs/mt7621_build_defconfig
+          
+          # Build u-boot with verbose output (single thread for better error messages)
+          # First, generate the .config file from our custom defconfig
+          make ARCH=mips CROSS_COMPILE=${TOOLCHAIN} mt7621_build_defconfig V=1
+          
+          # Debug: Check if .config was generated correctly
+          ls -la .config
+          grep -i spi_flash .config
+          
+          # Debug: Show include path in generated Makefile
+          grep -i UBOOTINCLUDE Makefile
+          
+          # Debug: Try to compile just the spi_flash module first to verify include paths
+          make ARCH=mips CROSS_COMPILE=${TOOLCHAIN} V=1 -j1 drivers/mtd/spi/ || true
+          
+          # Continue with full build
+          make ARCH=mips CROSS_COMPILE=${TOOLCHAIN} V=1 -j1
+          
+          # Create archive directory and copy output files
+          mkdir -p archive
+          if [ -f u-boot-mt7621.bin ]; then
+            cp u-boot-mt7621.bin archive/u-boot-newifi-d2.bin
+          fi
+          if [ -f u-boot.img ]; then
+            cp u-boot.img archive/u-boot-newifi-d2.img
+          fi
+          
+          # Check if build was successful
+          ls -la archive/
+
+      - name: Upload Newifi D2 binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: u-boot-newifi-d2
+          path: "uboot-mt7621/archive/"
