@@ -68,6 +68,7 @@ struct spi_flash {
 	u8 dual_flash;
 	u8 shift;
 	u16 flags;
+	u8 use_4byte_addr;
 
 	u32 size;
 	u32 page_size;
