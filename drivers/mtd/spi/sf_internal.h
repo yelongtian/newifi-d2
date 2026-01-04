@@ -26,8 +26,16 @@ enum spi_nor_option_flags {
 };
 
 #define SPI_FLASH_3B_ADDR_LEN		3
+#define SPI_FLASH_4B_ADDR_LEN		4
 #define SPI_FLASH_CMD_LEN		(1 + SPI_FLASH_3B_ADDR_LEN)
+#define SPI_FLASH_4B_CMD_LEN		(1 + SPI_FLASH_4B_ADDR_LEN)
 #define SPI_FLASH_16MB_BOUN		0x1000000
+
+/* 4-byte address mode commands */
+#define CMD_ENTER_4B_ADDR		0xb7
+#define CMD_EXIT_4B_ADDR		0xe9
+#define CMD_READ_4B_ARRAY_FAST		0x0c
+#define CMD_ERASE_4B_64K		0xdc
 
 /* CFI Manufacture ID's */
 #define SPI_FLASH_CFI_MFR_SPANSION	0x01
